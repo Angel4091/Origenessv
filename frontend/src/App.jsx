@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useSesion } from './context/Sesion.jsx';
 import { ROLES } from './roles.js';
@@ -7,7 +7,6 @@ import { Shell } from './components/Layout.jsx';
 import { Cargando } from './components/ui.jsx';
 import Login from './pages/Login.jsx';
 import Perfil from './pages/Perfil.jsx';
-import EnConstruccion from './pages/EnConstruccion.jsx';
 
 const PERFIL = { id: 'perfil', label: 'Perfil', ic: 'user', titulo: 'Mi perfil' };
 
@@ -22,8 +21,9 @@ function Pantalla({ perfil }) {
   const item = R.menu.find((m) => m.id === itemId);
   if (!item) return <Navigate to={`/${rol}/${R.entra}`} replace />;
   const tab = item.tabs ? item.tabs.find((t) => t.id === tabId) || item.tabs[0] : null;
-  const Comp = PAGINAS[`${rol}/${item.id}`] || EnConstruccion;
-  return <Shell rol={rol} item={item} tab={tab}><Comp tab={tab?.id} key={`${item.id}/${tab?.id}`} /></Shell>;
+  const Comp = PAGINAS[`${rol}/${item.id}`];
+  if (!Comp) return <Navigate to={`/${rol}/${R.entra}`} replace />;
+  return <Shell rol={rol} item={item} tab={tab}><Suspense fallback={<Cargando />}><Comp tab={tab?.id} key={`${item.id}/${tab?.id}`} /></Suspense></Shell>;
 }
 
 /** Pantalla de carga con la marca (una vez por sesión del navegador). */

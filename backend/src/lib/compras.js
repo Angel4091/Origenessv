@@ -224,3 +224,28 @@ export async function aceptarMercancia(c, compraId, u, pendiente) {
 
 /** Agrega datos a compras.detalle (cancelación, devolución, descuento, rechazo…). */
 export const detalle = (c, id, obj) => c.query('UPDATE compras SET detalle = detalle || $2::jsonb WHERE id = $1', [id, JSON.stringify(obj)]);
+
+/**
+ * El gerente general acepta: se confirma con el proveedor, sale una sola factura por toda la solicitud
+ * (cuenta por pagar si es a crédito) y la compra queda en camino con su hora de llegada simulada.
+ */
+export async function aceptarGG(c, cp, u) {
+  const t = ahora();
+  const { prom, llegada } = await horaLlegada(c, t, cp.entrega_h);
+  await c.query(`UPDATE compras SET estado = 'En camino', gg_id = $2, gg_fecha = $3, enviada = $3, prometida = $4, llegada = $5, llego = FALSE WHERE id = $1`,
+    [cp.id, u.id, ts(t), ts(prom), ts(llegada)]);
+  const fid = await crearFactura(c, cp.id);
+  const { rows } = await c.query('SELECT v.nombre, f.num FROM proveedores v, facturas f WHERE v.id = $1 AND f.id = $2', [cp.proveedor_id, fid]);
+  const { rows: ls } = await c.query('SELECT m.nombre, l.cantidad FROM compra_lineas l JOIN materias_primas m ON m.id = l.mp_id WHERE l.compra_id = $1 ORDER BY l.id', [cp.id]);
+  const llega = cp.entrega_h < 48 ? `${cp.entrega_h} h` : `${cp.entrega_h / 24} días`;
+  await notificar(c, 'rrhh', null, 'Factura de proveedor por archivar', `${rows[0].nombre} · ${rows[0].num}`);
+  await notificar(c, 'bodega', cp.sucursal_id, 'Compra en camino', `${rows[0].nombre} · llega en ${llega}`);
+  await notificar(c, 'gerente', cp.sucursal_id, 'Compra aceptada por gerencia general', ls.map((l) => `${l.nombre} ×${l.cantidad}`).join(', '));
+  return fid;
+}
+
+/** Pérdida de la sucursal por devolver o cancelar una compra (queda en Mermas). */
+export async function perdidaCompra(c, { suc, tipo, compra, motivo, costo, por }) {
+  await c.query(`INSERT INTO mermas (sucursal_id, fecha, tipo, motivo, costo, registro_id) VALUES ($1,$2,$3,$4,$5,$6)`,
+    [suc, ts(ahora()), tipo, `Compra #${compra}: ${motivo}`, costo, por ?? null]);
+}

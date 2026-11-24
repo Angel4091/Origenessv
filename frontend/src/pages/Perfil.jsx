@@ -2,32 +2,12 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form } from 'react-bootstrap';
 import { api } from '../lib/api.js';
-import { fTel, valTel, valCorreo } from '../lib/formato.js';
-import { useSesion } from '../context/Sesion.jsx';
+import { leerFoto } from '../lib/fotos.js';
+import { $, fTel, valTel, valCorreo } from '../lib/formato.js';
+import { imprimir, tablaHtml } from '../lib/excel.js';
+import { useDatos, useSesion } from '../context/Sesion.jsx';
 import { useDialogos } from '../context/Dialogos.jsx';
-import { Avatar, Btn, Campo, Card, Err, Mut } from '../components/ui.jsx';
-
-/** Reduce la imagen elegida (máx. 640 px) y la devuelve como data URL JPG. */
-function leerFoto(file) {
-  return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) return reject(new Error('No se pudo leer la imagen. Elige un archivo JPG o PNG.'));
-    const r = new FileReader();
-    r.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const k = Math.min(1, 640 / Math.max(img.width, img.height));
-        const c = document.createElement('canvas');
-        c.width = Math.round(img.width * k);
-        c.height = Math.round(img.height * k);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        resolve(c.toDataURL('image/jpeg', 0.78));
-      };
-      img.onerror = () => reject(new Error('No se pudo leer la imagen. Elige un archivo JPG o PNG.'));
-      img.src = r.result;
-    };
-    r.readAsDataURL(file);
-  });
-}
+import { Avatar, Btn, Campo, Card, Err, Mut, Tabla, Vacio } from '../components/ui.jsx';
 
 const Dato = ({ l, v }) => <div><small className="tw:text-tx2">{l}</small><div>{v || '—'}</div></div>;
 
@@ -128,7 +108,7 @@ export default function Perfil() {
         nota={u.rol === 'director' ? 'Si la olvidas, otro director te asignará una temporal desde el inicio de sesión.'
           : 'Si la olvidas, pídela desde el inicio de sesión: la persona responsable te asignará una temporal.'} />
 
-      {u.rol === 'gerente' && (
+      {['gerente', 'gg'].includes(u.rol) && (
         <Cambio titulo="Cambiar clave" url="/perfil/clave" onListo={listo('Clave actualizada')}
           campos={[{ k: 'actual', l: 'Clave actual', num: 1 }, { k: 'nueva', l: 'Clave nueva (4 a 6 números)', num: 1 }, { k: 'repetir', l: 'Repetir clave nueva', num: 1 }]}
           nota="Es la clave que escribes para aprobar compras, descuentos, despidos y otras decisiones. Es distinta de tu contraseña." />
@@ -140,6 +120,28 @@ export default function Perfil() {
           campos={[...(u.recupPin ? [] : [{ k: 'actual', l: 'PIN actual', num: 1 }]), { k: 'nuevo', l: 'PIN nuevo (4 a 6 números)', num: 1 }, { k: 'repetir', l: 'Repetir PIN nuevo', num: 1 }]}
           nota="Los directores entran con contraseña y PIN." />
       )}
+
+      {!u.cambiarPass && !u.cambiarPin && <MisPagos u={u} />}
     </div>
+  );
+}
+
+/* ---------- Mis pagos: quincenas generadas y las próximas con sus descuentos ---------- */
+const CP = ['Quincena', 'Mensual', 'Quincenal', 'ISSS', 'AFP', 'Renta', 'Líquido'];
+const filaPago = (x) => [x.label, $(x.mensual), $(x.bruto), `−${$(x.isss)}`, `−${$(x.afp)}`, `−${$(x.renta)}`, $(x.liquido)];
+function MisPagos({ u }) {
+  const { datos } = useDatos('/perfil/pagos');
+  if (!datos) return null;
+  const imp = () => imprimir(`Mis pagos · ${u.nombre}`, `<div>${u.rolNombre} · ${u.sucursalNombre || 'Toda la franquicia'}</div><h2>Pagos generados</h2>${
+    datos.hechos.length ? tablaHtml(CP, datos.hechos.map(filaPago)) : '<div class="mut">Aún no hay pagos generados.</div>'}<h2>Próximos pagos (con descuentos)</h2>${tablaHtml(CP, datos.prox.map(filaPago))
+  }<div class="mut">ISSS 3 % (tope $15 por quincena), AFP 7.25 % y retención de renta según la tabla del sistema.</div>`);
+  return (
+    <Card className="tw:col-span-full tw:flex tw:flex-col tw:gap-3">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2"><h3 className="tw:text-[15px] tw:m-0">Mis pagos</h3><span className="tw:flex-1" /><Btn v="p" onClick={imp}>Imprimir mis pagos</Btn></div>
+      <h4 className="tw:text-sm tw:m-0">Próximos pagos</h4>
+      <Tabla cols={CP} filas={datos.prox.map(filaPago)} />
+      <h4 className="tw:text-sm tw:m-0">Pagos generados</h4>
+      {datos.hechos.length ? <Tabla cols={CP} filas={datos.hechos.map(filaPago)} /> : <Vacio ic="list">Aún no hay pagos generados</Vacio>}
+    </Card>
   );
 }

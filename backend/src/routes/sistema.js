@@ -10,6 +10,7 @@ import { cfg, olvidarCfg, mesasOcupadas } from '../lib/negocio.js';
 import { autenticar } from '../middleware/auth.js';
 import { migrar } from '../migraciones.js';
 import { inventario } from './bodega.js';
+import { pendientesGG } from './gg.js';
 
 const r = Router();
 
@@ -102,6 +103,37 @@ async function contadores(u) {
     tabs['aprobaciones/solicitudes'] = await n(`SELECT count(*)::int n FROM solicitudes WHERE sucursal_id = $1 AND estado = 'Solicitada'
       AND (tipo IN ('Inhabilitar materia prima','Unidad nueva','Categoría de materia prima') OR (tipo = 'Despido' AND aprueba_rol = 'gerente'))`);
     menu.aprobaciones = Object.entries(tabs).filter(([k]) => k.startsWith('aprobaciones/')).reduce((a, [, v]) => a + v, 0);
+  } else if (['rrhh', 'gg', 'director'].includes(u.rol)) {
+    const resets = await contar(`SELECT count(*)::int n FROM solicitudes WHERE tipo = 'Restablecer contraseña' AND estado = 'Solicitada' AND aprueba_rol = $1 AND usuario_id <> $2`, [u.rol, u.id]);
+    if (u.rol === 'rrhh') {
+      tabs['personal/vacantes'] = await contar(`SELECT count(*)::int n FROM vacantes WHERE estado = 'Abierta'`);
+      tabs['personal/contrasenas'] = resets;
+      tabs['roles/catalogos'] = await contar(`SELECT count(*)::int n FROM solicitudes WHERE tipo IN ('Unidad nueva','Categoría de materia prima') AND estado = 'Aprobada por gerente'`);
+      tabs['pagos/reportes'] = await contar(`SELECT count(*)::int n FROM reportes_pago WHERE estado = 'Rechazado'`);
+      tabs['proveedores/porarchivar'] = await contar('SELECT count(*)::int n FROM facturas WHERE archivada IS NULL');
+    } else if (u.rol === 'gg') {
+      const p = await pendientesGG({ query: q });
+      tabs['aprobaciones/compras'] = p.Compras;
+      tabs['aprobaciones/proveedores'] = p.Proveedores;
+      tabs['aprobaciones/precios'] = p.Precios;
+      tabs['aprobaciones/menus'] = p['Menús'];
+      tabs['aprobaciones/contrasenas'] = resets;
+      tabs['productos/propuestas'] = p.Productos;
+      tabs['dinero/nomina'] = p['Nómina'];
+      tabs['sucursales/sucursales'] = await contar(`SELECT count(*)::int n FROM propuestas_sucursal WHERE estado = 'Compra aprobada'`);
+      tabs['sucursales/despidos'] = p.Despidos;
+      tabs['sucursales/plantilla'] = p.Personal;
+    } else {
+      const n = (tipo) => contar(`SELECT count(*)::int n FROM propuestas_sucursal WHERE estado = 'Solicitada' AND tipo = $1`, [tipo]);
+      tabs['aprobaciones/productos'] = await contar(`SELECT count(*)::int n FROM solicitudes WHERE estado = 'Aprobado por gerente general' AND tipo IN ('Producto nuevo','Extra nuevo','Categoría nueva')`);
+      tabs['aprobaciones/compra'] = await n('Compra');
+      tabs['aprobaciones/venta'] = await n('Venta');
+      tabs['aprobaciones/contrasenas'] = resets;
+    }
+    for (const [k, v] of Object.entries(tabs)) {
+      const m = k.split('/')[0];
+      if (k !== 'personal/vacantes') menu[m] = (menu[m] || 0) + v;
+    }
   }
   return { menu, tabs };
 }
