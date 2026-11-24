@@ -1,0 +1,95 @@
+import { Router } from 'express';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { q, pool } from '../db.js';
+import { config } from '../config.js';
+import { fallo, prohibido } from '../lib/errores.js';
+import { ahora, adelantar, cargarReloj, fmt } from '../lib/reloj.js';
+import { correrProcesos } from '../lib/procesos.js';
+import { cfg, olvidarCfg, mesasOcupadas } from '../lib/negocio.js';
+import { autenticar } from '../middleware/auth.js';
+
+const r = Router();
+
+/* ---------- reloj simulado ---------- */
+r.get('/reloj', (req, res) => res.json({ ahora: ahora(), texto: fmt(ahora()) }));
+
+const PASOS = { hora: 36e5, dia: 864e5, semana: 6048e5, mes: 2592e6 };
+
+/** Adelanta el reloj (+1 hora, +1 día, +7 días, +30 días) y corre los procesos del negocio. */
+r.post('/reloj/adelantar', async (req, res) => {
+  if (!config.demo) throw prohibido('El reloj solo se puede adelantar en modo demo');
+  const ms = PASOS[req.body?.paso];
+  if (!ms) throw fallo('Paso de tiempo inválido');
+  await adelantar(ms);
+  await correrProcesos();
+  res.json({ ahora: ahora(), texto: fmt(ahora()) });
+});
+
+/** «Restablecer datos»: vuelve a crear la BD con los datos iniciales (solo en modo demo). */
+r.post('/sistema/restablecer', async (req, res) => {
+  if (!config.demo) throw prohibido('Solo disponible en modo demo');
+  const archivos = (await fs.readdir(config.sqlDir)).filter((f) => f.endsWith('.sql')).sort();
+  if (!archivos.length) throw fallo('No se encontraron los archivos SQL de la base de datos');
+  const c = await pool.connect();
+  try {
+    await c.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    for (const f of archivos) await c.query(await fs.readFile(path.join(config.sqlDir, f), 'utf8'));
+  } finally {
+    c.release();
+  }
+  olvidarCfg();
+  await cargarReloj();
+  await correrProcesos();
+  res.clearCookie('osv_sesion', { path: '/' });
+  res.json({ ok: true });
+});
+
+/* ---------- pendientes (campana y contadores del menú) ---------- */
+const contar = async (sql, params) => (await q(sql, params)).rows[0].n;
+
+async function contadores(u) {
+  const s = u.sucursal;
+  const menu = {};
+  const tabs = {};
+  if (u.rol === 'mesero') {
+    menu.pedidos = await contar(`SELECT count(*)::int n FROM pedidos WHERE mesero_id = $1 AND estado = 'Listo'`, [u.id]);
+    menu.cobro = await contar(`SELECT count(*)::int n FROM pedidos WHERE mesero_id = $1 AND estado = 'Entregado' AND reposicion_de IS NULL`, [u.id]);
+    const k = await cfg({ query: q });
+    const oc = Object.values(await mesasOcupadas({ query: q }, s));
+    menu.mesas = oc.filter((p) => p.mesero_id === u.id && p.entregado && ahora() - p.entregado >= k.minutos_mesa * 60e3).length;
+    tabs['historial/solicitudes'] = await contar(
+      `SELECT count(*)::int n FROM solicitudes WHERE solicitante_id = $1 AND tipo IN ('Cancelación','Reposición','Devolución') AND estado = 'Solicitada'`, [u.id]);
+  } else if (u.rol === 'cocinero') {
+    const mis = await contar(`SELECT count(*)::int n FROM pedidos WHERE cocinero_id = $1 AND estado IN ('Asignado','Preparando')`, [u.id]);
+    tabs['mipedido/actual'] = mis ? 1 : 0;
+    tabs['mipedido/cola'] = Math.max(0, mis - 1);
+  } else if (u.rol === 'jefe') {
+    const { rows } = await q(`SELECT estado, count(*)::int n FROM pedidos WHERE sucursal_id = $1 AND estado IN ('Creado','Aceptado','Preparando','Asignado') GROUP BY estado`, [s]);
+    const n = Object.fromEntries(rows.map((x) => [x.estado, x.n]));
+    tabs['cola/nuevos'] = n.Creado || 0;
+    tabs['cola/aceptados'] = n.Aceptado || 0;
+    tabs['cola/prep'] = n.Preparando || 0;
+    tabs['cola/encola'] = n.Asignado || 0;
+    const { rows: sol } = await q(
+      `SELECT tipo, count(*)::int n FROM solicitudes WHERE sucursal_id = $1 AND estado = 'Solicitada' AND tipo IN ('Reposición','Cancelación','Devolución') GROUP BY tipo`, [s]);
+    const t = Object.fromEntries(sol.map((x) => [x.tipo, x.n]));
+    tabs['reposiciones/reposiciones'] = t['Reposición'] || 0;
+    tabs['reposiciones/cancelaciones'] = t['Cancelación'] || 0;
+    tabs['reposiciones/devoluciones'] = t['Devolución'] || 0;
+    tabs['recetas/propuestas'] = await contar(
+      `SELECT count(*)::int n FROM solicitudes WHERE sucursal_id = $1 AND estado = 'Propuesto' AND tipo IN ('Producto nuevo','Extra nuevo','Categoría nueva')`, [s]);
+  }
+  return { menu, tabs };
+}
+
+r.get('/pendientes', autenticar, async (req, res) => {
+  const u = req.usuario;
+  const { menu, tabs } = u.cambiar_pass || u.cambiar_pin ? { menu: {}, tabs: {} } : await contadores(u);
+  const { rows } = await q(
+    `SELECT id, titulo, detalle FROM notificaciones WHERE rol_id = $1 AND (sucursal_id IS NULL OR sucursal_id = $2) ORDER BY id DESC LIMIT 1`,
+    [u.rol, u.sucursal]);
+  res.json({ menu, tabs, ultima: rows[0] || null, ahora: ahora() });
+});
+
+export default r;
