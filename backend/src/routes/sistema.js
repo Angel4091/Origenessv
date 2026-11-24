@@ -8,6 +8,8 @@ import { ahora, adelantar, cargarReloj, fmt } from '../lib/reloj.js';
 import { correrProcesos } from '../lib/procesos.js';
 import { cfg, olvidarCfg, mesasOcupadas } from '../lib/negocio.js';
 import { autenticar } from '../middleware/auth.js';
+import { migrar } from '../migraciones.js';
+import { inventario } from './bodega.js';
 
 const r = Router();
 
@@ -39,6 +41,7 @@ r.post('/sistema/restablecer', async (req, res) => {
     c.release();
   }
   olvidarCfg();
+  await migrar();
   await cargarReloj();
   await correrProcesos();
   res.clearCookie('osv_sesion', { path: '/' });
@@ -79,6 +82,26 @@ async function contadores(u) {
     tabs['reposiciones/devoluciones'] = t['Devolución'] || 0;
     tabs['recetas/propuestas'] = await contar(
       `SELECT count(*)::int n FROM solicitudes WHERE sucursal_id = $1 AND estado = 'Propuesto' AND tipo IN ('Producto nuevo','Extra nuevo','Categoría nueva')`, [s]);
+  } else if (u.rol === 'bodega') {
+    const k = await cfg({ query: q });
+    const inv = await inventario({ query: q }, s);
+    tabs['alertas/stock'] = inv.filter((m) => !m.inhabilitada && m.minimo > 0 && m.stock < m.minimo).length;
+    tabs['alertas/vencer'] = await contar(
+      `SELECT count(*)::int n FROM lotes WHERE sucursal_id = $1 AND cantidad > 0 AND vence > $2 AND vence - $2 <= $3 * interval '1 day'`, [s, new Date(ahora()), k.por_vencer_dias]);
+    tabs['recepcion/camino'] = await contar(`SELECT count(*)::int n FROM compras WHERE sucursal_id = $1 AND estado = 'En camino'`, [s]);
+    menu.alertas = tabs['alertas/stock'] + tabs['alertas/vencer'];
+    menu.recepcion = tabs['recepcion/camino'];
+  } else if (u.rol === 'gerente') {
+    const n = (sql) => contar(sql, [s]);
+    tabs['aprobaciones/productos'] = await n(`SELECT count(*)::int n FROM solicitudes WHERE sucursal_id = $1 AND estado = 'Aprobado por jefe de cocina' AND tipo IN ('Producto nuevo','Extra nuevo','Categoría nueva')`);
+    tabs['aprobaciones/compras'] = await n(`SELECT count(*)::int n FROM compras WHERE sucursal_id = $1 AND estado = 'Preparada'`);
+    tabs['aprobaciones/recepcion'] = await n(`SELECT count(*)::int n FROM compras WHERE sucursal_id = $1 AND estado = 'Recibida'`);
+    tabs['aprobaciones/ofertas'] = await n(`SELECT count(*)::int n FROM ofertas WHERE sucursal_id = $1 AND estado = 'Pendiente'`);
+    tabs['aprobaciones/caja'] = await n(`SELECT count(*)::int n FROM cajas WHERE sucursal_id = $1 AND estado = 'Pendiente de aprobación'`);
+    tabs['aprobaciones/conteos'] = await n(`SELECT count(*)::int n FROM conteos WHERE sucursal_id = $1 AND estado = 'Enviado'`);
+    tabs['aprobaciones/solicitudes'] = await n(`SELECT count(*)::int n FROM solicitudes WHERE sucursal_id = $1 AND estado = 'Solicitada'
+      AND (tipo IN ('Inhabilitar materia prima','Unidad nueva','Categoría de materia prima') OR (tipo = 'Despido' AND aprueba_rol = 'gerente'))`);
+    menu.aprobaciones = Object.entries(tabs).filter(([k]) => k.startsWith('aprobaciones/')).reduce((a, [, v]) => a + v, 0);
   }
   return { menu, tabs };
 }

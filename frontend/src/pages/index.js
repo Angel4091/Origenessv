@@ -13,6 +13,17 @@ import CocinaEnVivo from './jefe/CocinaEnVivo.jsx';
 import Reposiciones from './jefe/Reposiciones.jsx';
 import Recetas from './jefe/Recetas.jsx';
 import HistorialJefe from './jefe/Historial.jsx';
+import Inventario from './bodega/Inventario.jsx';
+import Alertas from './bodega/Alertas.jsx';
+import ComprasBodega from './bodega/Compras.jsx';
+import Recepcion from './bodega/Recepcion.jsx';
+import Conteo from './bodega/Conteo.jsx';
+import ResumenGerente from './gerente/Resumen.jsx';
+import Aprobaciones from './gerente/Aprobaciones.jsx';
+import MenuSucursal from './gerente/Menu.jsx';
+import Mermas from './gerente/Mermas.jsx';
+import Pedir from './gerente/Pedir.jsx';
+import Equipo from './gerente/Equipo.jsx';
 
 export const PAGINAS = {
   'mesero/nuevo': NuevoPedido,
@@ -29,4 +40,15 @@ export const PAGINAS = {
   'jefe/reposiciones': Reposiciones,
   'jefe/recetas': Recetas,
   'jefe/historial': HistorialJefe,
+  'bodega/inventario': Inventario,
+  'bodega/alertas': Alertas,
+  'bodega/compras': ComprasBodega,
+  'bodega/recepcion': Recepcion,
+  'bodega/conteo': Conteo,
+  'gerente/resumen': ResumenGerente,
+  'gerente/aprobaciones': Aprobaciones,
+  'gerente/menu': MenuSucursal,
+  'gerente/mermas': Mermas,
+  'gerente/pedir': Pedir,
+  'gerente/equipo': Equipo,
 };

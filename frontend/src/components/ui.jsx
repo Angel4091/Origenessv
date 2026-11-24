@@ -171,15 +171,35 @@ export const Kv = ({ pares }) => (
   </div>
 );
 
-/* ---------- tabla (Bootstrap) ---------- */
+/* ---------- tabla (Bootstrap) · cada fila es un arreglo de celdas o {celdas, onClick, tono:'rj'|'az', dim} ---------- */
+const TONO_FILA = { rj: 'tw:[&>td]:bg-[#FDF0EE]', az: 'tw:[&>td]:bg-[#EEF5FF]' };
 export const Tabla = ({ cols, filas }) => (
   <div className="tw:overflow-x-auto tw:rounded-[20px] tw:border tw:border-bd tw:shadow-osv tw:bg-sf">
     <Table hover className="tbl-osv">
-      <thead><tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-      <tbody>{filas.map((f, i) => <tr key={i}>{f.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody>
+      <thead><tr>{cols.map((c, i) => <th key={i}>{c}</th>)}</tr></thead>
+      <tbody>
+        {filas.map((f, i) => {
+          const o = Array.isArray(f) ? { celdas: f } : f;
+          return (
+            <tr key={i} onClick={o.onClick} className={`${o.onClick ? 'tw:cursor-pointer' : ''} ${TONO_FILA[o.tono] || ''} ${o.dim ? 'tw:opacity-55' : ''}`}>
+              {o.celdas.map((c, j) => <td key={j}>{c}</td>)}
+            </tr>
+          );
+        })}
+      </tbody>
     </Table>
   </div>
 );
+
+/** Nivel de stock contra el mínimo. */
+export function Nivel({ v, min }) {
+  const p = min ? v / min : 1;
+  const t = p < 0.5 ? 'er' : p < 1 ? 'wa' : 'ok';
+  return <div className="tw:flex tw:items-center tw:gap-2 tw:min-w-[140px]"><div className="tw:flex-1"><Barra pct={p * 100} tono={t} /></div>{p < 1 && <Chip t="Bajo" o={t} />}</div>;
+}
+
+/** Botón de opción que se activa/desactiva (✓). */
+export const Toggle = ({ on, onClick, children }) => <Btn v={on ? 'p' : ''} onClick={onClick}>{on ? '✓ ' : ''}{children}</Btn>;
 
 /* ---------- panel lateral (Offcanvas de React-Bootstrap) ---------- */
 export function Panel({ show, onHide, titulo, estado, ro, pie, children }) {
