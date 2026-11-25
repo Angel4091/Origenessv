@@ -4,7 +4,7 @@ import { q } from '../db.js';
 import { HttpError, prohibido } from '../lib/errores.js';
 
 export const COOKIE = 'osv_sesion';
-const opciones = { httpOnly: true, sameSite: 'lax', secure: config.produccion, path: '/' };
+const opciones = { httpOnly: true, sameSite: 'lax', secure: config.cookieSegura, path: '/' };
 
 export function abrirSesion(res, usuarioId) {
   const token = jwt.sign({ uid: usuarioId }, config.jwtSecret, { expiresIn: '12h' });

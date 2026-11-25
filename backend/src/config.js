@@ -12,4 +12,6 @@ export const config = {
   sqlDir: path.resolve(aqui, '..', process.env.SQL_DIR || '../database/init'),
   uploadsDir: path.resolve(aqui, '..', 'uploads'),
   produccion: process.env.NODE_ENV === 'production',
+  // Cookie solo por HTTPS: actívalo cuando la app se sirva con certificado
+  cookieSegura: process.env.COOKIE_SECURE === 'true',
 };

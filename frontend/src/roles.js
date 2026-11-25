@@ -1,9 +1,9 @@
 /*
- * Menú de cada rol (máx. 6 entradas) y sus pestañas. Las pantallas de esta fase
- * (mesero, cocinero y jefe de cocina) están construidas; las demás se construyen en su fase.
+ * Menú de cada rol (máx. 6 entradas) y sus pestañas («id:Etiqueta» separadas por comas).
+ * Cada entrada se dibuja con la pantalla registrada en pages/index.js.
  */
 const T = (s) => s.split(',').map((x) => { const [id, label] = x.split(':'); return { id, label }; });
-const M = (id, label, ic, tabs, titulo, fase) => ({ id, label, ic, tabs: tabs ? T(tabs) : null, titulo: titulo || label, fase });
+const M = (id, label, ic, tabs, titulo) => ({ id, label, ic, tabs: tabs ? T(tabs) : null, titulo: titulo || label });
 
 export const ROLES = {
   mesero: {
@@ -36,37 +36,54 @@ export const ROLES = {
     ],
   },
   bodega: {
-    nombre: 'Encargado de bodega', alcance: 'sucursal', entra: 'inventario', fase: 3,
-    menu: [M('inventario', 'Inventario', 'box'), M('alertas', 'Alertas', 'bell'), M('compras', 'Compras', 'dollar'), M('recepcion', 'Recepción', 'check')],
+    nombre: 'Encargado de bodega', alcance: 'sucursal', entra: 'inventario',
+    menu: [
+      M('inventario', 'Inventario', 'box'),
+      M('alertas', 'Alertas', 'bell', 'stock:Stock bajo,vencer:Lotes por vencer'),
+      M('compras', 'Compras', 'dollar', null, 'Solicitudes de compra'),
+      M('recepcion', 'Recepción', 'check', 'camino:En camino,enviadas:Enviadas al gerente', 'Recepción de mercancía'),
+      M('conteo', 'Conteo físico', 'list'),
+    ],
   },
   gerente: {
-    nombre: 'Gerente de sucursal', alcance: 'sucursal', entra: 'resumen', fase: 4,
+    nombre: 'Gerente de sucursal', alcance: 'sucursal', entra: 'resumen',
     menu: [
-      M('resumen', 'Resumen', 'home'),
-      M('aprobaciones', 'Aprobaciones', 'check', 'productos:Productos,compras:Compras y recepción,ofertas:Ofertas,caja:Caja,solicitudes:Solicitudes del equipo'),
-      M('menu', 'Menú', 'list'), M('mermas', 'Mermas', 'box'), M('pedir', 'Pedir a gerencia', 'dollar'),
+      M('resumen', 'Resumen', 'home', null, 'Resumen de sucursal'),
+      M('aprobaciones', 'Aprobaciones', 'check', 'productos:Productos,compras:Compras,recepcion:Recepción,ofertas:Ofertas,caja:Caja,conteos:Conteos de inventario,solicitudes:Solicitudes del equipo,historial:Historial de aprobaciones'),
+      M('menu', 'Menú', 'list', 'mi:Mi menú,catalogo:Catálogo de la franquicia,historial:Historial de productos', 'Menú de la sucursal'),
+      M('mermas', 'Mermas', 'box'),
+      M('pedir', 'Pedir a gerencia', 'dollar'),
       M('equipo', 'Equipo', 'users', 'equipo:Equipo,plantilla:Plantilla'),
     ],
   },
   rrhh: {
-    nombre: 'Recursos Humanos', alcance: 'franquicia', entra: 'personal', fase: 5,
-    menu: [M('personal', 'Personal', 'users'), M('roles', 'Roles y salarios', 'dollar'), M('turnos', 'Turnos', 'clock'), M('pagos', 'Pagos', 'list', 'planilla:Planilla,reportes:Reportes de pago')],
+    nombre: 'Recursos Humanos', alcance: 'franquicia', entra: 'personal',
+    menu: [
+      M('personal', 'Personal', 'users', 'empleados:Empleados,vacantes:Vacantes,despidos:Despidos,contrasenas:Contraseñas'),
+      M('roles', 'Roles y salarios', 'dollar', 'roles:Roles,aumentos:Aumentos por antigüedad,empleados:Por empleado,catalogos:Catálogos MP'),
+      M('turnos', 'Turnos', 'clock'),
+      M('pagos', 'Pagos', 'list', 'planilla:Planilla,reportes:Reportes de pago'),
+      M('proveedores', 'Proveedores', 'truck', 'lista:Proveedores,porarchivar:Facturas por archivar,archivo:Archivo de facturas', 'Proveedores y facturas'),
+    ],
   },
   gg: {
-    nombre: 'Gerente general', alcance: 'franquicia', entra: 'panel', fase: 5,
+    nombre: 'Gerente general', alcance: 'franquicia', entra: 'panel',
     menu: [
-      M('panel', 'Panel', 'home'),
-      M('aprobaciones', 'Aprobaciones', 'check', 'compras:Compras,proveedores:Proveedores,precios:Precios'),
+      M('panel', 'Panel', 'home', null, 'Panel de franquicia'),
+      M('aprobaciones', 'Aprobaciones', 'check', 'compras:Compras,proveedores:Proveedores,precios:Precios,menus:Menús,contrasenas:Contraseñas'),
       M('productos', 'Productos', 'box', 'propuestas:Propuestas,catalogo:Catálogo'),
       M('dinero', 'Dinero', 'dollar', 'cxp:Cuentas por pagar,nomina:Nómina'),
-      M('sucursales', 'Sucursales', 'box', 'sucursales:Sucursales,despidos:Despidos,plantilla:Plantilla'),
+      M('sucursales', 'Sucursales', 'home', 'sucursales:Sucursales,despidos:Despidos,plantilla:Plantilla'),
     ],
   },
   director: {
-    nombre: 'Director', alcance: 'franquicia', entra: 'ingresos', fase: 6,
+    nombre: 'Director', alcance: 'franquicia', entra: 'ingresos',
     menu: [
-      M('ingresos', 'Ingresos', 'dollar'), M('aprobaciones', 'Aprobaciones', 'check'),
-      M('franquicia', 'Franquicia', 'box', 'sucursales:Sucursales,catalogo:Catálogo'), M('directores', 'Directores', 'users'), M('bitacora', 'Bitácora', 'list'),
+      M('ingresos', 'Ingresos', 'chart'),
+      M('aprobaciones', 'Aprobaciones', 'check', 'productos:Productos nuevos,compra:Compra de sucursal,venta:Venta de sucursal,contrasenas:Contraseñas'),
+      M('franquicia', 'Franquicia', 'box', 'sucursales:Sucursales,personal:Personal,catalogo:Catálogo,proveedores:Proveedores'),
+      M('directores', 'Directores', 'users'),
+      M('bitacora', 'Bitácora', 'list'),
     ],
   },
 };

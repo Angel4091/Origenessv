@@ -7,6 +7,7 @@ import { config } from '../config.js';
 import { fallo, si, prohibido } from '../lib/errores.js';
 import { bitacora } from '../lib/registro.js';
 import { cargarUsuario, usuarioPublico } from '../middleware/auth.js';
+import { pagosDe } from '../lib/nomina.js';
 
 /* ADENDA §1: cada quien edita solo lo suyo (teléfono, correo, contraseña, foto; PIN y clave según su rol). */
 const r = Router();
@@ -58,7 +59,7 @@ r.put('/pin', async (req, res) => {
 /** Clave de aprobaciones del gerente de sucursal (distinta de la contraseña). */
 r.put('/clave', async (req, res) => {
   const u = req.usuario;
-  if (u.rol !== 'gerente') throw prohibido();
+  if (!['gerente', 'gg'].includes(u.rol)) throw prohibido();
   const { actual = '', nueva = '', repetir = '' } = req.body || {};
   si(!(await bcrypt.compare(String(actual), (await hashDe(u.id, 'clave_hash')) || '')), 'La clave actual no es correcta');
   si(!/^\d{4,6}$/.test(nueva), 'La clave nueva debe tener de 4 a 6 números');
@@ -87,6 +88,12 @@ r.put('/foto', async (req, res) => {
     await bitacora(c, u, { accion: 'foto.cambiar', elemento: u.usuario, motivo: 'persona' });
   });
   res.json({ usuario: await yo(req) });
+});
+
+/** Mis pagos: quincenas ya generadas y las próximas con sus descuentos. */
+r.get('/pagos', async (req, res) => {
+  const { rows } = await q('SELECT * FROM usuarios WHERE id = $1', [req.usuario.id]);
+  res.json(await pagosDe({ query: q }, rows[0]));
 });
 
 r.delete('/foto', async (req, res) => {
