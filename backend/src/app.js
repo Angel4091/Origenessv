@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import { config } from './config.js';
 import { HttpError } from './lib/errores.js';
 import { marcarActividad } from './lib/reloj.js';
+import { enMantenimiento } from './lib/mantenimiento.js';
 import { autenticar, exigirCredencialesAlDia, soloRoles } from './middleware/auth.js';
 import auth from './routes/auth.js';
 import sistema from './routes/sistema.js';
@@ -28,6 +29,12 @@ app.use(cookieParser());
 app.use('/uploads', express.static(config.uploadsDir, { maxAge: '7d', fallthrough: false }));
 
 app.get('/api/salud', (req, res) => res.json({ ok: true }));
+
+// Mientras se restablecen los datos de la demo, la API espera
+app.use('/api', (req, res, next) => {
+  if (enMantenimiento()) return res.status(503).json({ error: 'Estamos restableciendo los datos. Intenta de nuevo en unos segundos.' });
+  return next();
+});
 
 // El reloj simulado solo corre mientras alguien usa la app
 app.use('/api', async (req, res, next) => {

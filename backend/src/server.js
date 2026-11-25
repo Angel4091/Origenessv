@@ -3,6 +3,7 @@ import { config } from './config.js';
 import { cargarReloj, latido } from './lib/reloj.js';
 import { correrProcesos } from './lib/procesos.js';
 import { migrar } from './migraciones.js';
+import { enMantenimiento } from './lib/mantenimiento.js';
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -31,6 +32,7 @@ app.listen(config.port, () => {
 // Cada 10 s: si alguien usa la app, el reloj sigue y se corren los procesos (llegadas, vencimientos, ofertas…);
 // si no, el reloj queda en pausa.
 setInterval(async () => {
+  if (enMantenimiento()) return;
   try {
     if (await latido()) await correrProcesos();
   } catch (e) {

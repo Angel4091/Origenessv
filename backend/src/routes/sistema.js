@@ -9,6 +9,7 @@ import { correrProcesos } from '../lib/procesos.js';
 import { cfg, olvidarCfg, mesasOcupadas } from '../lib/negocio.js';
 import { autenticar } from '../middleware/auth.js';
 import { migrar } from '../migraciones.js';
+import { conMantenimiento } from '../lib/mantenimiento.js';
 import { inventario } from './bodega.js';
 import { pendientesGG } from './gg.js';
 
@@ -34,17 +35,19 @@ r.post('/sistema/restablecer', async (req, res) => {
   if (!config.demo) throw prohibido('Solo disponible en modo demo');
   const archivos = (await fs.readdir(config.sqlDir)).filter((f) => f.endsWith('.sql')).sort();
   if (!archivos.length) throw fallo('No se encontraron los archivos SQL de la base de datos');
-  const c = await pool.connect();
-  try {
-    await c.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
-    for (const f of archivos) await c.query(await fs.readFile(path.join(config.sqlDir, f), 'utf8'));
-  } finally {
-    c.release();
-  }
-  olvidarCfg();
-  await migrar();
-  await cargarReloj();
-  await correrProcesos();
+  await conMantenimiento(async () => {
+    const c = await pool.connect();
+    try {
+      await c.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+      for (const f of archivos) await c.query(await fs.readFile(path.join(config.sqlDir, f), 'utf8'));
+    } finally {
+      c.release();
+    }
+    olvidarCfg();
+    await migrar();
+    await cargarReloj();
+    await correrProcesos();
+  });
   res.clearCookie('osv_sesion', { path: '/' });
   res.json({ ok: true });
 });

@@ -131,6 +131,12 @@ erDiagram
     conteos ||--o{ conteo_filas : "contiene"
     materias_primas ||--o{ conteo_filas : "contada"
     sucursales ||--o{ avisos_stock : "aviso"
+    materias_primas ||--o{ materia_categorias : "tiene"
+    mp_categorias ||--o{ materia_categorias : "clasifica"
+    sucursales ||--o{ sucursal_mp_inhabilitada : "no usa"
+    materias_primas ||--o{ sucursal_mp_inhabilitada : "inhabilitada"
+    proveedores ||--o{ proveedor_cambios : "cambios"
+    usuarios ||--o{ proveedores : "registra / edita"
 
     mp_unidades {
         varchar nombre PK
@@ -152,7 +158,25 @@ erDiagram
         varchar condicion_pago
         varchar politica_tipo
         smallint politica_tolerancia_h
+        varchar estado "Activo, Inhabilitado, Eliminado"
         numeric saldo_favor
+        int creado_por FK
+        int editado_por FK
+    }
+    proveedor_cambios {
+        int id PK
+        int proveedor_id FK
+        timestamptz fecha
+        text detalle
+    }
+    materia_categorias {
+        int mp_id PK,FK
+        varchar categoria PK,FK
+    }
+    sucursal_mp_inhabilitada {
+        int sucursal_id PK,FK
+        int mp_id PK,FK
+        int solicitud_id FK
     }
     proveedor_materias {
         int proveedor_id PK,FK
@@ -233,6 +257,8 @@ erDiagram
     productos ||--o{ sucursal_menu : "en menú"
     sucursales ||--o{ sucursal_revisar : "revisar"
     productos ||--o{ sucursal_revisar : "precio por revisar"
+    sucursales ||--o{ menu_historial : "altas y bajas"
+    productos ||--o{ menu_historial : "en menú"
 
     categorias {
         int id PK
@@ -284,6 +310,14 @@ erDiagram
         int sucursal_id PK,FK
         int producto_id PK,FK
     }
+    menu_historial {
+        int id PK
+        int sucursal_id FK
+        int producto_id FK
+        varchar estado
+        timestamptz fecha
+        text razon
+    }
 ```
 
 ## 4. Servicio, compras y finanzas
@@ -317,6 +351,7 @@ erDiagram
     sucursales ||--o{ mermas : "pierde"
     lotes ||--o{ mermas : "vencido"
     pedidos ||--o{ mermas : "pérdida"
+    usuarios ||--o{ facturas : "archiva (RR. HH.)"
 
     pedidos {
         int id PK
@@ -402,7 +437,11 @@ erDiagram
         int compra_id FK
         int proveedor_id FK
         numeric monto
-        varchar estado
+        varchar estado "Pendiente, Pagada, Anulada"
+        numeric pagado_monto
+        numeric saldo_usado
+        timestamptz archivada
+        int archivada_por FK
     }
     factura_lineas {
         int factura_id PK,FK
@@ -470,6 +509,7 @@ erDiagram
         numeric afp
         numeric renta
         numeric liquido
+        numeric base
     }
     reportes_pago {
         int id PK
@@ -477,6 +517,8 @@ erDiagram
         int sucursal_id FK
         numeric total
         varchar estado
+        timestamptz enviado
+        int decidio_id FK
     }
     boletas {
         int id PK
@@ -528,7 +570,7 @@ erDiagram
 
 | Tabla | Para qué sirve |
 |---|---|
-| `sistema` | Una sola fila con el reloj simulado: `hora = reloj_base + (ahora_real − real_base)`. Adelantar el tiempo suma a `reloj_base`. |
+| `sistema` | Una sola fila con el reloj simulado: `hora = reloj_base + (ahora_real − real_base)`; con `pausado` el reloj se queda en `reloj_base` (nadie usa la app). Adelantar el tiempo suma a `reloj_base`. |
 | `configuracion` | Una sola fila con los parámetros del negocio (IVA, márgenes, vigencia de cotizaciones, etc.). |
 | `v_stock`, `v_reservado` | Vistas: existencias vigentes por sucursal y lo apartado por pedidos que aún no se preparan. |
 | `ahora()` | Función SQL que devuelve la hora simulada. |
